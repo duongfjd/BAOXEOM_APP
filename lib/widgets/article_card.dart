@@ -45,12 +45,33 @@ class ArticleCard extends StatelessWidget {
                     height: 100,
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
-                      color: Colors.grey.withOpacity(0.1),
-                      child: const Icon(Icons.image, color: Colors.grey),
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                      child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     ),
                     errorWidget: (context, url, error) => Container(
-                      color: Colors.grey.withOpacity(0.1),
-                      child: const Icon(Icons.broken_image, color: Colors.grey),
+                      width: 100,
+                      height: 100,
+                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.image_not_supported_outlined,
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                            size: 24,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'No Image',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

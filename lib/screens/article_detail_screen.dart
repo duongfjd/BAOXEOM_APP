@@ -35,6 +35,35 @@ class ArticleDetailScreen extends StatelessWidget {
                   fit: BoxFit.cover,
                   color: Colors.black.withOpacity(0.2),
                   colorBlendMode: BlendMode.darken,
+                  placeholder: (context, url) => Container(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.image_not_supported_outlined,
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                            size: 64,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Image not available',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                              fontSize: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

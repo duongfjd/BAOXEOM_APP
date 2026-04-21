@@ -1,25 +1,22 @@
 import 'package:flutter/material.dart';
-import '../models/article.dart';
-import '../services/mock_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import '../providers/article_provider.dart';
 import '../utils/constants.dart';
 import '../widgets/article_card.dart';
 import '../widgets/hot_news_carousel.dart';
+import '../widgets/recommended_article_card.dart';
 import '../widgets/shimmer_loading.dart';
 import 'article_detail_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  bool _isLoading = true;
-  List<Article> _articles = [];
-  List<Article> _hotNews = [];
-  String _selectedCategory = 'Tất cả';
-
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   final List<String> _categories = [
     'Tất cả',
     'Chính trị',
@@ -30,31 +27,43 @@ class _HomeScreenState extends State<HomeScreen> {
     'Giải trí'
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
+  final TextEditingController _searchController = TextEditingController();
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    // Simulate API delay
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      setState(() {
-        _articles = MockService.getMockArticles();
-        _hotNews = MockService.getHotNews();
-        _isLoading = false;
-      });
-    }
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final selectedCategory = ref.watch(selectedCategoryProvider);
+    final searchQuery = ref.watch(searchQueryProvider);
+    
+    final articlesAsyncValue = ref.watch(latestArticlesProvider(ArticleParams(
+      category: selectedCategory,
+      searchQuery: searchQuery,
+      limit: 6,
+      offset: 0,
+    )));
+    
+    final hotNewsAsyncValue = ref.watch(hotNewsProvider);
+    final recommendedAsyncValue = ref.watch(recommendedArticlesProvider(ArticleParams(
+      category: selectedCategory,
+      searchQuery: searchQuery,
+      limit: 6,
+      offset: 6,
+    )));
+    
+    final formattedDate = DateFormat('EEEE, dd MMMM, yyyy', 'vi_VN').format(DateTime.now());
+
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _loadData,
+          onRefresh: () async {
+            ref.invalidate(latestArticlesProvider);
+            ref.invalidate(hotNewsProvider);
+          },
           color: Theme.of(context).colorScheme.primary,
           child: CustomScrollView(
             slivers: [
@@ -72,13 +81,18 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Chào buổi sáng,',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                              Text(
-                                'Tin tức hôm nay',
+                                'Báo Xe Ôm',
                                 style: Theme.of(context).textTheme.displayLarge?.copyWith(
                                       fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                              ),
+                              const SizedBox(height: AppConstants.space4),
+                              Text(
+                                formattedDate,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                                     ),
                               ),
                             ],
@@ -99,11 +113,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: AppConstants.space24),
                       // Search Bar
                       TextField(
+                        controller: _searchController,
+                        onSubmitted: (value) {
+                          ref.read(searchQueryProvider.notifier).update(value);
+                        },
                         decoration: InputDecoration(
                           hintText: 'Tìm kiếm tin tức...',
                           prefixIcon: const Icon(Icons.search_rounded),
+                          suffixIcon: searchQuery.isNotEmpty 
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  ref.read(searchQueryProvider.notifier).update('');
+                                },
+                              )
+                            : null,
                           filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(AppConstants.radius16),
                             borderSide: BorderSide.none,
@@ -128,14 +155,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: AppConstants.space16),
                     itemBuilder: (context, index) {
                       final category = _categories[index];
-                      final isSelected = _selectedCategory == category;
+                      final isSelected = selectedCategory == category;
                       return Padding(
                         padding: const EdgeInsets.only(right: AppConstants.space8),
                         child: FilterChip(
                           label: Text(category),
                           selected: isSelected,
                           onSelected: (selected) {
-                            setState(() => _selectedCategory = category);
+                            ref.read(selectedCategoryProvider.notifier).update(category);
                           },
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(AppConstants.radius24),
@@ -157,12 +184,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
               // Hot News Carousel
-              if (!_isLoading)
-                SliverToBoxAdapter(
+              hotNewsAsyncValue.when(
+                data: (articles) => SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: AppConstants.space24),
                     child: HotNewsCarousel(
-                      articles: _hotNews,
+                      articles: articles,
                       onArticleTap: (article) {
                         Navigator.push(
                           context,
@@ -174,6 +201,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
+                loading: () => const SliverToBoxAdapter(child: SizedBox(height: 220, child: Center(child: CircularProgressIndicator()))),
+                error: (err, stack) => SliverToBoxAdapter(child: Center(child: Text('Error: $err'))),
+              ),
 
               // Latest News Header
               SliverToBoxAdapter(
@@ -199,30 +229,76 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
               // Feed
-              if (_isLoading)
-                const SliverToBoxAdapter(child: ShimmerLoading())
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppConstants.space16),
-                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        return ArticleCard(
-                          article: _articles[index],
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ArticleDetailScreen(article: _articles[index]),
-                              ),
+              articlesAsyncValue.when(
+                data: (articles) => articles.isEmpty 
+                  ? const SliverToBoxAdapter(child: Center(child: Padding(padding: EdgeInsets.all(32), child: Text('Không tìm thấy bài viết nào.'))))
+                  : SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppConstants.space16),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            return ArticleCard(
+                              article: articles[index],
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ArticleDetailScreen(article: articles[index]),
+                                  ),
+                                );
+                              },
                             );
                           },
-                        );
-                      },
-                      childCount: _articles.length,
+                          childCount: articles.length,
+                        ),
+                      ),
                     ),
+                loading: () => const SliverToBoxAdapter(child: ShimmerLoading()),
+                error: (err, stack) => SliverToBoxAdapter(child: Center(child: Text('Error: $err'))),
+              ),
+
+              // Recommended News Header
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.space16),
+                  child: Text(
+                    'Đề xuất cho bạn',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+              ),
+
+              // Recommended News Feed
+              recommendedAsyncValue.when(
+                data: (articles) => articles.isEmpty 
+                  ? const SliverToBoxAdapter(child: SizedBox.shrink())
+                  : SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: 240,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.only(left: AppConstants.space16),
+                          itemCount: articles.length,
+                          itemBuilder: (context, index) {
+                            return RecommendedArticleCard(
+                              article: articles[index],
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ArticleDetailScreen(article: articles[index]),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+                error: (err, stack) => SliverToBoxAdapter(child: Center(child: Text('Error: $err'))),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: AppConstants.space32)),
             ],
           ),
         ),

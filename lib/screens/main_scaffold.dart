@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
+import 'all_news_screen.dart';
 import 'bookmarks_screen.dart';
 import 'profile_screen.dart';
 
@@ -15,6 +16,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   final List<Widget> _screens = [
     const HomeScreen(),
+    const AllNewsScreen(),
     const BookmarksScreen(),
     const ProfileScreen(),
   ];
@@ -37,6 +39,11 @@ class _MainScaffoldState extends State<MainScaffold> {
             label: 'Trang chủ',
           ),
           NavigationDestination(
+            icon: Icon(Icons.article_outlined),
+            selectedIcon: Icon(Icons.article_rounded),
+            label: 'Tất cả tin',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.bookmark_border_rounded),
             selectedIcon: Icon(Icons.bookmark_rounded),
             label: 'Đã lưu',
@@ -51,3 +58,4 @@ class _MainScaffoldState extends State<MainScaffold> {
     );
   }
 }
+
