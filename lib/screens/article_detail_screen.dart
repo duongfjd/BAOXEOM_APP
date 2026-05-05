@@ -1,12 +1,15 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/article.dart';
 import '../utils/constants.dart';
+import '../providers/interaction_provider.dart';
+import 'login_screen.dart';
 
-class ArticleDetailScreen extends StatelessWidget {
+class ArticleDetailScreen extends ConsumerWidget {
   final Article article;
 
   const ArticleDetailScreen({super.key, required this.article});
@@ -18,8 +21,29 @@ class ArticleDetailScreen extends StatelessWidget {
     }
   }
 
+  void _showLoginPrompt(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: SnackBarAction(
+          label: 'Đăng nhập',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final interactionsState = ref.watch(interactionProvider);
+    final isBookmarked = interactionsState.value?.bookmarkedArticleIds.contains(article.id) ?? false;
+    final isLiked = interactionsState.value?.likedArticleIds.contains(article.id) ?? false;
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -73,8 +97,15 @@ class ArticleDetailScreen extends StatelessWidget {
                 onPressed: () => Share.share(article.url),
               ),
               IconButton(
-                icon: const Icon(Icons.bookmark_border_rounded),
-                onPressed: () {},
+                icon: Icon(isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded),
+                color: isBookmarked ? Theme.of(context).colorScheme.primary : null,
+                onPressed: () async {
+                  try {
+                    await ref.read(interactionProvider.notifier).toggleBookmark(article.id);
+                  } catch (e) {
+                    _showLoginPrompt(context, e.toString().replaceAll('Exception: ', ''));
+                  }
+                },
               ),
             ],
           ),
@@ -213,9 +244,21 @@ class ArticleDetailScreen extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildActionButton(context, Icons.favorite_border_rounded, 'Yêu thích'),
-              _buildActionButton(context, Icons.mode_comment_outlined, 'Bình luận'),
-              _buildActionButton(context, Icons.text_fields_rounded, 'Cỡ chữ'),
+              _buildActionButton(
+                context,
+                isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                'Yêu thích',
+                isLiked ? Theme.of(context).colorScheme.primary : null,
+                () async {
+                  try {
+                    await ref.read(interactionProvider.notifier).toggleLike(article.id);
+                  } catch (e) {
+                    _showLoginPrompt(context, e.toString().replaceAll('Exception: ', ''));
+                  }
+                },
+              ),
+              _buildActionButton(context, Icons.mode_comment_outlined, 'Bình luận', null, () {}),
+              _buildActionButton(context, Icons.text_fields_rounded, 'Cỡ chữ', null, () {}),
             ],
           ),
         ),
@@ -223,14 +266,21 @@ class ArticleDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(BuildContext context, IconData icon, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(height: 4),
-        Text(label, style: Theme.of(context).textTheme.labelSmall),
-      ],
+  Widget _buildActionButton(BuildContext context, IconData icon, String label, Color? color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color ?? Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 4),
+            Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color)),
+          ],
+        ),
+      ),
     );
   }
 }
