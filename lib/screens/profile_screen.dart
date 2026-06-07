@@ -56,12 +56,6 @@ class ProfileScreen extends ConsumerWidget {
             ),
             _buildSettingsItem(
               context,
-              icon: Icons.notifications_none_rounded,
-              title: 'Thông báo',
-              onTap: () {},
-            ),
-            _buildSettingsItem(
-              context,
               icon: Icons.help_outline_rounded,
               title: 'Hỗ trợ & Trợ giúp',
               onTap: () {},
@@ -105,7 +99,8 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-            const SizedBox(height: AppConstants.space40),
+            // Padding 120px để nút không bị thanh điều hướng lơ lửng che khuất
+            const SizedBox(height: 120),
           ],
         ),
       ),

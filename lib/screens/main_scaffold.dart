@@ -29,8 +29,28 @@ class _MainScaffoldState extends State<MainScaffold> {
       // Sử dụng Stack để xếp chồng viên thuốc lên trên danh sách tin tức
       body: Stack(
         children: [
-          // Lớp dưới: Nội dung màn hình hiện tại (Cuộn tràn toàn màn hình)
-          _screens[_currentIndex],
+          // Lớp dưới: Nội dung màn hình hiện tại với hiệu ứng chuyển cảnh
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 350),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.02, 0.0), // Trượt ngang rất nhẹ nhàng
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: SizedBox(
+              key: ValueKey<int>(_currentIndex),
+              child: _screens[_currentIndex],
+            ),
+          ),
 
           // Lớp trên: Viên thuốc nổi độc lập
           // VIÊN THUỐC THỦY TINH LỎNG (LIQUID GLASS)
