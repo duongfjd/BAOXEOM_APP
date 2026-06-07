@@ -31,19 +31,39 @@ class HotNewsCarousel extends StatelessWidget {
           onTap: () => onArticleTap(article),
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: AppConstants.space4),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppConstants.radius24),
-              image: DecorationImage(
-                image: CachedNetworkImageProvider(article.urlToImage ?? ''),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(
-                  Colors.black.withOpacity(0.3),
-                  BlendMode.darken,
-                ),
-              ),
-            ),
             child: Stack(
               children: [
+                // Image Background
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppConstants.radius24),
+                  child: CachedNetworkImage(
+                    imageUrl: article.urlToImage ?? '',
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    placeholder: (context, url) => Image.asset(
+                      AppConstants.newsPlaceholder,
+                      fit: BoxFit.cover,
+                    ),
+                    errorWidget: (context, url, error) => Image.asset(
+                      AppConstants.newsPlaceholder,
+                      fit: BoxFit.cover,
+                    ),
+                    imageBuilder: (context, imageProvider) => Container(
+                      decoration: BoxDecoration(
+                        image: DecorationImage(
+                          image: imageProvider,
+                          fit: BoxFit.cover,
+                          colorFilter: ColorFilter.mode(
+                            Colors.black.withOpacity(0.3),
+                            BlendMode.darken,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Text Info
                 Positioned(
                   bottom: AppConstants.space20,
                   left: AppConstants.space20,
@@ -61,12 +81,13 @@ class HotNewsCarousel extends StatelessWidget {
                           color: Theme.of(context).colorScheme.primary,
                           borderRadius: BorderRadius.circular(AppConstants.radius8),
                         ),
-                        child: const Text(
+                        child: Text(
                           'TIN NÓNG',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
+                            fontFamily: Theme.of(context).textTheme.bodyLarge?.fontFamily,
                           ),
                         ),
                       ),
@@ -75,18 +96,21 @@ class HotNewsCarousel extends StatelessWidget {
                         article.titleVi,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
                           fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: Theme.of(context).textTheme.titleLarge?.fontFamily,
+                          height: 1.3,
                         ),
                       ),
                       const SizedBox(height: AppConstants.space4),
                       Text(
                         '${article.sourceName} • ${article.category}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
+                          fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
                         ),
                       ),
                     ],

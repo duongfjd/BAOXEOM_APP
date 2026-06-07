@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system, // Automatically follows system theme
+      themeMode: ThemeMode.light, // Forces the cream/navy theme
       home: const MainScaffold(),
     );
   }

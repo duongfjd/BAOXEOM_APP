@@ -16,112 +16,96 @@ class ArticleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppConstants.space16),
-      elevation: 0,
-      color: Theme.of(context).colorScheme.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        side: BorderSide(
-          color: Theme.of(context).dividerColor.withOpacity(0.1),
-        ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black.withOpacity(0.05), width: 0.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          )
+        ],
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        child: Padding(
-          padding: const EdgeInsets.all(AppConstants.space12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Article Image
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppConstants.radius12),
-                child: Hero(
-                  tag: 'article_image_${article.id}',
-                  child: CachedNetworkImage(
-                    imageUrl: article.urlToImage ?? '',
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
-                      child: const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Article Image
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Hero(
+                    tag: 'article_image_${article.id}',
+                    child: CachedNetworkImage(
+                      imageUrl: article.urlToImage ?? '',
+                      width: 90,
+                      height: 90,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Image.asset(
+                        AppConstants.newsPlaceholder,
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
                       ),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      width: 100,
-                      height: 100,
-                      color: Theme.of(context).colorScheme.surfaceVariant,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.image_not_supported_outlined,
-                            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-                            size: 24,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'No Image',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-                            ),
-                          ),
-                        ],
+                      errorWidget: (context, url, error) => Image.asset(
+                        AppConstants.newsPlaceholder,
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: AppConstants.space12),
-              // Article Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      article.category.toUpperCase(),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                          ),
-                    ),
-                    const SizedBox(height: AppConstants.space4),
-                    Text(
-                      article.titleVi,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            height: 1.3,
-                          ),
-                    ),
-                    const SizedBox(height: AppConstants.space8),
-                    Row(
-                      children: [
-                        Text(
-                          article.sourceName,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                const SizedBox(width: 16),
+                // Article Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        article.category.toUpperCase(),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.secondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
                         ),
-                        const SizedBox(width: AppConstants.space8),
-                        const Icon(Icons.circle, size: 4, color: Colors.grey),
-                        const SizedBox(width: AppConstants.space8),
-                        Text(
-                          DateFormat('dd/MM/yyyy').format(article.publishedAt),
-                          style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        article.titleVi,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: Theme.of(context).textTheme.titleLarge?.fontFamily,
+                          height: 1.3,
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${article.sourceName}  •  ${DateFormat('dd/MM/yyyy').format(article.publishedAt)}',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.4),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

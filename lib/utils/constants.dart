@@ -20,4 +20,5 @@ class AppConstants {
 
   // Max Width for tablets or large screens
   static const double maxContentWidth = 800.0;
+  static const String newsPlaceholder = 'assets/NEWS.jpg';
 }

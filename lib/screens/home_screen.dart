@@ -119,10 +119,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         },
                         decoration: InputDecoration(
                           hintText: 'Tìm kiếm tin tức...',
-                          prefixIcon: const Icon(Icons.search_rounded),
+                          hintStyle: TextStyle(color: Theme.of(context).colorScheme.primary.withOpacity(0.4)),
+                          prefixIcon: Icon(Icons.search_rounded, color: Theme.of(context).colorScheme.primary.withOpacity(0.5)),
                           suffixIcon: searchQuery.isNotEmpty 
                             ? IconButton(
-                                icon: const Icon(Icons.clear_rounded),
+                                icon: Icon(Icons.clear_rounded, color: Theme.of(context).colorScheme.primary.withOpacity(0.5)),
                                 onPressed: () {
                                   _searchController.clear();
                                   ref.read(searchQueryProvider.notifier).update('');
@@ -130,9 +131,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               )
                             : null,
                           filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                          fillColor: Theme.of(context).colorScheme.primary.withOpacity(0.04),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppConstants.radius16),
+                            borderRadius: BorderRadius.circular(16),
                             borderSide: BorderSide.none,
                           ),
                           contentPadding: const EdgeInsets.symmetric(

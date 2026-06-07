@@ -42,7 +42,7 @@ class InteractionService {
   Future<List<Article>> fetchBookmarkedArticles(String userId) async {
     final response = await _supabase
         .from('bookmarks')
-        .select('..., articles(*)')
+        .select('*, articles(*)')
         .eq('user_id', userId)
         .order('created_at', ascending: false);
 
