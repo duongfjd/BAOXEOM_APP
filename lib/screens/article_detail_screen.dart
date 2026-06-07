@@ -1,6 +1,6 @@
 import 'dart:ui' show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_tts/flutter_tts.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -9,14 +9,26 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/article.dart';
 import '../utils/constants.dart';
 import '../providers/interaction_provider.dart';
+import '../services/fpt_tts_service.dart';
 import 'login_screen.dart';
 
 class FontSizeNotifier extends Notifier<double> {
   @override
   double build() => 1.0;
 }
-
 final fontSizeProvider = NotifierProvider<FontSizeNotifier, double>(FontSizeNotifier.new);
+
+class FptVoiceNotifier extends Notifier<String> {
+  @override
+  String build() => 'banmai';
+}
+final fptVoiceProvider = NotifierProvider<FptVoiceNotifier, String>(FptVoiceNotifier.new);
+
+class FptSpeedNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+}
+final fptSpeedProvider = NotifierProvider<FptSpeedNotifier, int>(FptSpeedNotifier.new);
 
 class ArticleDetailScreen extends ConsumerWidget {
   final Article article;
@@ -244,7 +256,7 @@ class ArticleDetailScreen extends ConsumerWidget {
                   const Divider(height: AppConstants.space40),
 
                   // TTS Player Widget
-                  TtsPlayerWidget(
+                  FptTtsPlayerWidget(
                     textToSpeak: '${article.titleVi}. ${article.summaryVi}. ${article.fullContentVi ?? ''}',
                   ),
                   const SizedBox(height: AppConstants.space24),
@@ -434,60 +446,156 @@ class LiquidGlassBorderPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class TtsPlayerWidget extends StatefulWidget {
+class FptTtsPlayerWidget extends ConsumerStatefulWidget {
   final String textToSpeak;
-  const TtsPlayerWidget({super.key, required this.textToSpeak});
+  const FptTtsPlayerWidget({super.key, required this.textToSpeak});
 
   @override
-  State<TtsPlayerWidget> createState() => _TtsPlayerWidgetState();
+  ConsumerState<FptTtsPlayerWidget> createState() => _FptTtsPlayerWidgetState();
 }
 
-class _TtsPlayerWidgetState extends State<TtsPlayerWidget> {
-  final FlutterTts flutterTts = FlutterTts();
-  bool isPlaying = false;
-
+class _FptTtsPlayerWidgetState extends ConsumerState<FptTtsPlayerWidget> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final FptTtsService _ttsService = FptTtsService();
+  
+  bool _isPlaying = false;
+  bool _isLoading = false;
+  String? _currentAudioUrl;
+  
   @override
   void initState() {
     super.initState();
-    _initTts();
-  }
-
-  void _initTts() async {
-    try {
-      // Thử dùng vi-VN trước, nếu không được thì dùng vi
-      var isViVn = await flutterTts.isLanguageAvailable("vi-VN");
-      if (isViVn != null && (isViVn == true || isViVn == 1)) {
-        await flutterTts.setLanguage("vi-VN");
-      } else {
-        await flutterTts.setLanguage("vi");
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+          if (state == PlayerState.completed) {
+            _isPlaying = false;
+            _audioPlayer.seek(Duration.zero);
+          }
+        });
       }
-    } catch (e) {
-      await flutterTts.setLanguage("vi-VN");
-    }
-
-    await flutterTts.setSpeechRate(0.5);
-    await flutterTts.setVolume(1.0);
-    await flutterTts.setPitch(1.0);
-
-    flutterTts.setCompletionHandler(() {
-      if (mounted) setState(() => isPlaying = false);
     });
   }
 
   @override
   void dispose() {
-    flutterTts.stop();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
-  void _togglePlay() async {
-    if (isPlaying) {
-      await flutterTts.stop();
-      if (mounted) setState(() => isPlaying = false);
+  Future<void> _togglePlay() async {
+    if (_isPlaying) {
+      await _audioPlayer.pause();
     } else {
-      if (mounted) setState(() => isPlaying = true);
-      await flutterTts.speak(widget.textToSpeak);
+      if (_currentAudioUrl != null) {
+        await _audioPlayer.resume();
+      } else {
+        await _generateAndPlay();
+      }
     }
+  }
+
+  Future<void> _generateAndPlay() async {
+    setState(() { _isLoading = true; });
+    try {
+      final voice = ref.read(fptVoiceProvider);
+      final speed = ref.read(fptSpeedProvider);
+      
+      final url = await _ttsService.generateAudioUrl(widget.textToSpeak, voice, speed);
+      if (url != null) {
+        bool isReady = await _ttsService.waitForAudioReady(url);
+        if (isReady && mounted) {
+          _currentAudioUrl = url;
+          await _audioPlayer.play(UrlSource(url));
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lỗi: File audio chưa sẵn sàng từ FPT.')));
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lỗi: Kết nối FPT API thất bại.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi phát âm thanh: $e')));
+      }
+    } finally {
+      if (mounted) setState(() { _isLoading = false; });
+    }
+  }
+
+  void _showTtsSettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return Consumer(
+          builder: (context, ref, child) {
+            final voice = ref.watch(fptVoiceProvider);
+            final speed = ref.watch(fptSpeedProvider);
+            
+            return Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Cài đặt Giọng đọc', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 24),
+                  const Text('Giọng đọc (FPT.AI)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: voice,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'banmai', child: Text('Ban Mai (Nữ miền Bắc)')),
+                      DropdownMenuItem(value: 'lannhi', child: Text('Lan Nhi (Nữ miền Nam)')),
+                      DropdownMenuItem(value: 'leminh', child: Text('Lê Minh (Nam miền Bắc)')),
+                      DropdownMenuItem(value: 'myan', child: Text('Mỹ An (Nữ miền Trung)')),
+                      DropdownMenuItem(value: 'thuminh', child: Text('Thu Minh (Nữ miền Bắc)')),
+                      DropdownMenuItem(value: 'giahuy', child: Text('Gia Huy (Nam miền Trung)')),
+                      DropdownMenuItem(value: 'linhsan', child: Text('Linh San (Nữ miền Nam)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        ref.read(fptVoiceProvider.notifier).state = val;
+                        _currentAudioUrl = null; // Cần gen lại file nếu đổi giọng
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  const Text('Tốc độ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      const Text('Chậm'),
+                      Expanded(
+                        child: Slider(
+                          value: speed.toDouble(),
+                          min: -3,
+                          max: 3,
+                          divisions: 6,
+                          label: speed > 0 ? '+$speed' : speed.toString(),
+                          activeColor: const Color(0xFF00C6FF),
+                          onChanged: (val) {
+                            ref.read(fptSpeedProvider.notifier).state = val.toInt();
+                            _currentAudioUrl = null; // Cần gen lại file nếu đổi tốc độ
+                          },
+                        ),
+                      ),
+                      const Text('Nhanh'),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            );
+          }
+        );
+      }
+    );
   }
 
   @override
@@ -506,13 +614,21 @@ class _TtsPlayerWidgetState extends State<TtsPlayerWidget> {
               color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: IconButton(
-              icon: Icon(
-                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              onPressed: _togglePlay,
-            ),
+            child: _isLoading
+              ? const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: SizedBox(
+                    width: 24, height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : IconButton(
+                  icon: Icon(
+                    _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  onPressed: _togglePlay,
+                ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -520,18 +636,25 @@ class _TtsPlayerWidgetState extends State<TtsPlayerWidget> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Nghe bài báo',
+                  'Nghe bài báo (FPT.AI)',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 Text(
-                  isPlaying ? 'Đang phát âm thanh...' : 'Nhấn để nghe nội dung',
+                  _isLoading 
+                    ? 'Đang tổng hợp giọng nói...' 
+                    : (_isPlaying ? 'Đang phát âm thanh...' : 'Nhấn để nghe nội dung'),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            color: Theme.of(context).colorScheme.primary,
+            onPressed: () => _showTtsSettings(context),
           ),
         ],
       ),
