@@ -10,6 +10,7 @@ import '../models/article.dart';
 import '../utils/constants.dart';
 import '../providers/interaction_provider.dart';
 import '../services/fpt_tts_service.dart';
+import '../services/google_tts_service.dart';
 import 'login_screen.dart';
 
 class FontSizeNotifier extends Notifier<double> {
@@ -29,6 +30,12 @@ class FptSpeedNotifier extends Notifier<int> {
   int build() => 0;
 }
 final fptSpeedProvider = NotifierProvider<FptSpeedNotifier, int>(FptSpeedNotifier.new);
+
+class TtsEngineNotifier extends Notifier<String> {
+  @override
+  String build() => 'fpt'; // 'fpt' or 'google'
+}
+final ttsEngineProvider = NotifierProvider<TtsEngineNotifier, String>(TtsEngineNotifier.new);
 
 class ArticleDetailScreen extends ConsumerWidget {
   final Article article;
@@ -455,48 +462,84 @@ class FptTtsPlayerWidget extends ConsumerStatefulWidget {
 }
 
 class _FptTtsPlayerWidgetState extends ConsumerState<FptTtsPlayerWidget> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _audioPlayer = AudioPlayer(); // Cho FPT
   final FptTtsService _ttsService = FptTtsService();
+  final GoogleTranslateTtsService _googleTtsService = GoogleTranslateTtsService();
   
   bool _isPlaying = false;
   bool _isLoading = false;
   String? _currentAudioUrl;
+  bool _hasGoogleStarted = false;
   
   @override
   void initState() {
     super.initState();
     _audioPlayer.onPlayerStateChanged.listen((state) {
-      if (mounted) {
-        setState(() {
-          _isPlaying = state == PlayerState.playing;
-          if (state == PlayerState.completed) {
-            _isPlaying = false;
-            _audioPlayer.seek(Duration.zero);
-          }
-        });
+      if (ref.read(ttsEngineProvider) == 'fpt') {
+        if (mounted) {
+          setState(() {
+            _isPlaying = state == PlayerState.playing;
+            if (state == PlayerState.completed) {
+              _isPlaying = false;
+              _audioPlayer.seek(Duration.zero);
+            }
+          });
+        }
       }
     });
+
+    _googleTtsService.onComplete = () {
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+          _hasGoogleStarted = false; // Reset để có thể nghe lại từ đầu
+        });
+      }
+    };
   }
 
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _googleTtsService.dispose();
     super.dispose();
   }
 
   Future<void> _togglePlay() async {
+    final engine = ref.read(ttsEngineProvider);
+
     if (_isPlaying) {
-      await _audioPlayer.pause();
-    } else {
-      if (_currentAudioUrl != null) {
-        await _audioPlayer.resume();
+      if (engine == 'fpt') {
+        await _audioPlayer.pause();
       } else {
-        await _generateAndPlay();
+        await _googleTtsService.pause();
+      }
+      setState(() => _isPlaying = false);
+    } else {
+      if (engine == 'fpt') {
+        if (_currentAudioUrl != null) {
+          await _audioPlayer.resume();
+          setState(() => _isPlaying = true);
+        } else {
+          await _generateAndPlayFpt();
+        }
+      } else {
+        // Google TTS
+        if (_hasGoogleStarted) {
+          await _googleTtsService.resume();
+          setState(() => _isPlaying = true);
+        } else {
+          setState(() {
+            _isPlaying = true;
+            _hasGoogleStarted = true;
+          });
+          await _googleTtsService.speakVietnamese(widget.textToSpeak);
+        }
       }
     }
   }
 
-  Future<void> _generateAndPlay() async {
+  Future<void> _generateAndPlayFpt() async {
     setState(() { _isLoading = true; });
     try {
       final voice = ref.read(fptVoiceProvider);
@@ -531,6 +574,7 @@ class _FptTtsPlayerWidgetState extends ConsumerState<FptTtsPlayerWidget> {
       builder: (context) {
         return Consumer(
           builder: (context, ref, child) {
+            final engine = ref.watch(ttsEngineProvider);
             final voice = ref.watch(fptVoiceProvider);
             final speed = ref.watch(fptSpeedProvider);
             
@@ -542,52 +586,106 @@ class _FptTtsPlayerWidgetState extends ConsumerState<FptTtsPlayerWidget> {
                 children: [
                   Text('Cài đặt Giọng đọc', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 24),
-                  const Text('Giọng đọc (FPT.AI)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  
+                  const Text('Dịch vụ đọc', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: voice,
+                    value: engine,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'banmai', child: Text('Ban Mai (Nữ miền Bắc)')),
-                      DropdownMenuItem(value: 'lannhi', child: Text('Lan Nhi (Nữ miền Nam)')),
-                      DropdownMenuItem(value: 'leminh', child: Text('Lê Minh (Nam miền Bắc)')),
-                      DropdownMenuItem(value: 'myan', child: Text('Mỹ An (Nữ miền Trung)')),
-                      DropdownMenuItem(value: 'thuminh', child: Text('Thu Minh (Nữ miền Bắc)')),
-                      DropdownMenuItem(value: 'giahuy', child: Text('Gia Huy (Nam miền Trung)')),
-                      DropdownMenuItem(value: 'linhsan', child: Text('Linh San (Nữ miền Nam)')),
+                      DropdownMenuItem(value: 'fpt', child: Text('FPT.AI (Giọng chuẩn, Cao cấp)')),
+                      DropdownMenuItem(value: 'google', child: Text('Google Translate (Nhanh, Miễn phí)')),
                     ],
                     onChanged: (val) {
                       if (val != null) {
-                        ref.read(fptVoiceProvider.notifier).state = val;
-                        _currentAudioUrl = null; // Cần gen lại file nếu đổi giọng
+                        ref.read(ttsEngineProvider.notifier).state = val;
+                        // Dừng tất cả đang phát
+                        _audioPlayer.stop();
+                        _googleTtsService.stop();
+                        setState(() {
+                          _isPlaying = false;
+                          _hasGoogleStarted = false;
+                        });
                       }
                     },
                   ),
                   const SizedBox(height: 24),
-                  const Text('Tốc độ', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Row(
-                    children: [
-                      const Text('Chậm'),
-                      Expanded(
-                        child: Slider(
-                          value: speed.toDouble(),
-                          min: -3,
-                          max: 3,
-                          divisions: 6,
-                          label: speed > 0 ? '+$speed' : speed.toString(),
-                          activeColor: const Color(0xFF00C6FF),
-                          onChanged: (val) {
-                            ref.read(fptSpeedProvider.notifier).state = val.toInt();
-                            _currentAudioUrl = null; // Cần gen lại file nếu đổi tốc độ
-                          },
-                        ),
+
+                  if (engine == 'fpt') ...[
+                    const Text('Giọng đọc (FPT.AI)', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: voice,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
-                      const Text('Nhanh'),
-                    ],
-                  ),
+                      items: const [
+                        DropdownMenuItem(value: 'banmai', child: Text('Ban Mai (Nữ miền Bắc)')),
+                        DropdownMenuItem(value: 'lannhi', child: Text('Lan Nhi (Nữ miền Nam)')),
+                        DropdownMenuItem(value: 'leminh', child: Text('Lê Minh (Nam miền Bắc)')),
+                        DropdownMenuItem(value: 'myan', child: Text('Mỹ An (Nữ miền Trung)')),
+                        DropdownMenuItem(value: 'thuminh', child: Text('Thu Minh (Nữ miền Bắc)')),
+                        DropdownMenuItem(value: 'giahuy', child: Text('Gia Huy (Nam miền Trung)')),
+                        DropdownMenuItem(value: 'linhsan', child: Text('Linh San (Nữ miền Nam)')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          ref.read(fptVoiceProvider.notifier).state = val;
+                          _currentAudioUrl = null; 
+                          _audioPlayer.stop();
+                          setState(() => _isPlaying = false);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    const Text('Tốc độ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        const Text('Chậm'),
+                        Expanded(
+                          child: Slider(
+                            value: speed.toDouble(),
+                            min: -3,
+                            max: 3,
+                            divisions: 6,
+                            label: speed > 0 ? '+$speed' : speed.toString(),
+                            activeColor: const Color(0xFF00C6FF),
+                            onChanged: (val) {
+                              ref.read(fptSpeedProvider.notifier).state = val.toInt();
+                              _currentAudioUrl = null; 
+                              _audioPlayer.stop();
+                              setState(() => _isPlaying = false);
+                            },
+                          ),
+                        ),
+                        const Text('Nhanh'),
+                      ],
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.green),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Đang sử dụng API ngầm của Google Translate. Miễn phí vô hạn, tải siêu tốc, không giới hạn độ dài!',
+                              style: TextStyle(color: Colors.green, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                 ],
               ),
@@ -600,6 +698,8 @@ class _FptTtsPlayerWidgetState extends ConsumerState<FptTtsPlayerWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final engine = ref.watch(ttsEngineProvider);
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -636,7 +736,7 @@ class _FptTtsPlayerWidgetState extends ConsumerState<FptTtsPlayerWidget> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Nghe bài báo (FPT.AI)',
+                  engine == 'fpt' ? 'Nghe bài báo (FPT.AI)' : 'Nghe bài báo (Google)',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.primary,

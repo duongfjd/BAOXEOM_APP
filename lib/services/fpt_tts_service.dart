@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class FptTtsService {
@@ -16,7 +17,6 @@ class FptTtsService {
           'api-key': _apiKey,
           'speed': speed.toString(),
           'voice': voice,
-          // 'Content-Type': 'application/json' // API này nhận body trực tiếp dạng string
         },
         body: safeText,
       );
@@ -39,18 +39,32 @@ class FptTtsService {
   Future<bool> waitForAudioReady(String url) async {
     int maxRetries = 20; // Thử tối đa 20 lần (khoảng 60 giây)
     int delayMs = 3000; // Mỗi lần cách nhau 3 giây
+    bool isCorsBlocked = false;
 
     for (int i = 0; i < maxRetries; i++) {
       try {
         final response = await http.head(Uri.parse(url));
         if (response.statusCode == 200) {
-          return true;
+          return true; // File đã sẵn sàng
         }
       } catch (e) {
-        // Bỏ qua lỗi kết nối
+        // Nếu chạy trên Web không tắt CORS, http.head sẽ bắn exception
+        if (kIsWeb && e.toString().contains('Failed to fetch')) {
+          isCorsBlocked = true;
+          break; // Thoát vòng lặp để dùng fallback
+        }
+        // Bỏ qua các lỗi mạng tạm thời khác
       }
       await Future.delayed(Duration(milliseconds: delayMs));
     }
+
+    // FALLBACK cho Web bị chặn CORS:
+    if (isCorsBlocked) {
+      // Đợi thêm 15 giây (tổng cộng đủ lâu để FPT gen xong bài báo dài)
+      await Future.delayed(const Duration(seconds: 15));
+      return true; // Giả định là file đã xong
+    }
+
     return false; // Quá thời gian chờ
   }
 }
