@@ -13,7 +13,7 @@ class MockService {
         sourceName: 'VnExpress',
         author: 'Nguyễn Văn A',
         urlToImage: 'https://picsum.photos/seed/${index + 100}/800/600',
-        fullContentVi: 'Nội dung đầy đủ của bài báo số $index sẽ được hiển thị ở đây. ' * 20,
+        fullContentVi: 'Đây là nội dung đầy đủ chi tiết của bài báo số $index. Hệ thống đang tiến hành thử nghiệm tính năng nghe báo nói sử dụng công nghệ của FPT AI API. Chức năng này giúp chuyển đổi các văn bản bài viết thành giọng nói tự nhiên, giúp người dùng có thể nghe tin tức một cách thuận tiện nhất khi đang di chuyển hoặc làm việc khác. Hãy trải nghiệm và cảm nhận chất lượng giọng đọc.',
       );
     });
   }

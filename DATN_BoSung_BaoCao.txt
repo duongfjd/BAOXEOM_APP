@@ -1,0 +1,217 @@
+================================================================================
+TÀI LIỆU BỔ SUNG BÁO CÁO ĐỒ ÁN TỐT NGHIỆP - PHẠM HỒNG DƯƠNG
+Đề tài: Phát triển ứng dụng đọc báo thông minh tích hợp Pipeline tự động hóa nội dung
+================================================================================
+
+Dưới đây là nội dung chi tiết được biên soạn theo văn phong học thuật chuẩn quy chuẩn Đồ án tốt nghiệp. Bạn có thể sao chép trực tiếp vào báo cáo của mình.
+
+--------------------------------------------------------------------------------
+PHẦN 1: BỔ SUNG VÀO CHƯƠNG 2
+--------------------------------------------------------------------------------
+* Vị trí chèn: Đặt làm mục "2.6. Thiết kế luồng hoạt động tổng quát của hệ thống".
+* (Lưu ý: Nếu mục 2.6 cũ là "Thiết kế giao diện", hãy đổi tên mục 2.6 cũ thành "2.7. Thiết kế giao diện" và đẩy các phần liên quan xuống dưới).
+
+2.6. Thiết kế luồng hoạt động tổng quát của hệ thống
+
+Để người đọc dễ dàng hình dung kiến trúc vận hành của ứng dụng đọc báo thông minh News Enjoy, sơ đồ dưới đây mô tả luồng công việc tự động hóa nội dung chạy ngầm ở Backend kết hợp với cơ chế tương tác và hiển thị trực tiếp dữ liệu thông qua Supabase BaaS (Backend-as-a-Service) của Mobile Client.
+
+2.6.1. Sơ đồ luồng hoạt động hệ thống (System Workflow)
+(Sinh viên sao chép mã Mermaid dưới đây để vẽ sơ đồ trực quan qua Draw.io hoặc các công cụ hỗ trợ Mermaid như Markdown, Notion, GitHub...)
+
+```mermaid
+flowchart TD
+    %% Định nghĩa các Style màu sắc
+    classDef source fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px,color:#01579b;
+    classDef process fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#f57f17;
+    classDef database fill:#e8f5e9,stroke:#4caf50,stroke-width:2px,color:#1b5e20;
+    classDef ai fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px,color:#4a148c;
+    classDef client fill:#ffe0b2,stroke:#ff9800,stroke-width:2px,color:#e65100;
+    classDef trigger fill:#eceff1,stroke:#607d8b,stroke-width:2px,color:#263238;
+
+    %% --- PHẦN A: TIẾN TRÌNH CÀO TIN & AI (BACKEND NODE.JS WORKER) ---
+    subgraph BACKEND_WORKER ["Backend Node.js (Background Worker)"]
+        Cron[Cron Job: Định kỳ 1 giờ/lần]:::trigger
+        Start([Bắt đầu quét tin mới])::::trigger
+        
+        VnExpress[VnExpress RSS Feed]:::source
+        NewsAPI[NewsAPI Global Tech]:::source
+        
+        RssParser[RssParser: Parse XML]:::process
+        NewsService[NewsService: Fetch tin thô]:::process
+        
+        CheckDB{Kiểm tra trùng lặp URL trong DB?}:::process
+        Skip([Bỏ qua: Bài viết đã tồn tại]):::trigger
+        
+        HtmlExtractor[HtmlExtractor: Cào HTML chi tiết & Trích xuất Ảnh/Tác giả]:::process
+        CleanText[Làm sạch & Giới hạn văn bản <8000 ký tự]:::process
+        
+        BuildPrompt[Thiết kế Prompt & cấu hình JSON Output]:::process
+        GeminiCall{Gọi Gemini API gemini-2.5-flash}:::ai
+        PollinationsCall[Fallback API: Pollinations AI]:::ai
+        
+        ParseJSON[ParseJSON: Chuẩn hóa & parse sang Object]:::process
+        SaveDB[Lưu trực tiếp vào Supabase qua PostgreSQL connection]:::process
+    end
+
+    %% --- PHẦN B: CƠ SỞ DỮ LIỆU TRUNG TÂM SUPABASE ---
+    subgraph SUPABASE_DB ["Cơ sở dữ liệu Supabase (PostgreSQL)"]
+        TableArticles[(Bảng articles)]:::database
+        TableBookmarks[(Bảng bookmarks)]:::database
+        TableLikes[(Bảng likes)]:::database
+    end
+
+    %% --- PHẦN C: MOBILE CLIENT (FLUTTER APP) ---
+    subgraph CLIENT_APP ["Ứng dụng di động (Flutter Mobile Client)"]
+        FetchSupabase[Gọi Supabase SDK: select từ bảng articles]:::process
+        RenderUI[Hiển thị danh sách tin tức theo Chuyên mục]:::client
+        ArticleDetail[Màn hình chi tiết: Đọc tin dịch, Tóm tắt]:::client
+        
+        TTS[Đọc tin tự động: Google TTS / FPT TTS]:::client
+        UserInteract[Tương tác: Bookmark / Thích bài viết]:::client
+        UpdateSupabase[Tương tác trực tiếp: insert/delete vào bookmarks & likes]:::process
+    end
+
+    %% Thiết lập luồng kết nối
+    Cron --> Start
+    Start --> VnExpress & NewsAPI
+    
+    %% Luồng RSS
+    VnExpress --> RssParser
+    RssParser --> CheckDB
+    
+    %% Luồng NewsAPI
+    NewsAPI --> NewsService
+    NewsService --> CheckDB
+    
+    %% Kiểm tra trùng lặp qua Supabase DB
+    CheckDB -- "Truy vấn DB kiểm tra" --> TableArticles
+    CheckDB -- "Đã có trong DB" --> Skip
+    CheckDB -- "Chưa có trong DB" --> RssProcessing{Nguồn?}:::process
+    
+    RssProcessing -- "RSS" --> HtmlExtractor
+    HtmlExtractor --> CleanText
+    CleanText --> BuildPrompt
+    
+    RssProcessing -- "NewsAPI" --> BuildPrompt
+    
+    BuildPrompt --> GeminiCall
+    GeminiCall -- "Thành công" --> ParseJSON
+    GeminiCall -- "Lỗi/Timeout" --> PollinationsCall
+    PollinationsCall --> ParseJSON
+    
+    %% Ghi thẳng vào Supabase Database
+    ParseJSON --> SaveDB
+    SaveDB --> TableArticles
+    
+    %% Flutter Client đọc trực tiếp từ Supabase
+    TableArticles --> FetchSupabase
+    FetchSupabase --> RenderUI
+    RenderUI --> ArticleDetail
+    
+    %% Flutter Client xử lý tương tác trực tiếp qua Supabase
+    ArticleDetail --> TTS
+    ArticleDetail --> UserInteract
+    UserInteract --> UpdateSupabase
+    UpdateSupabase --> TableBookmarks & TableLikes
+```
+
+2.6.2. Mô tả chi tiết hoạt động của hệ thống
+
+Luồng công việc tổng quát của hệ thống được vận hành đồng bộ thông qua các bước xử lý sau:
+
+- Bước 1: Lên lịch và kích hoạt tiến trình (Triggering)
+  Hệ thống thiết lập một tiến trình chạy ngầm (Cron Job) bằng thư viện `node-cron` ở Backend. Tiến trình này hoạt động tự động và được lên lịch kích hoạt định kỳ mỗi 1 giờ/lần.
+
+- Bước 2: Thu thập thông tin từ các nguồn dữ liệu (Data Ingestion)
+  Khi tiến trình được kích hoạt, Backend sẽ đồng thời thực hiện thu thập dữ liệu từ hai nguồn tin tức độc lập:
+  + Nguồn tin trong nước (VnExpress RSS): Bộ phận `RssParser` kết nối và phân tích (parse) các tài liệu XML từ các feed RSS của báo điện tử VnExpress để lấy danh sách bài viết bao gồm tiêu đề gốc và đường dẫn (URL).
+  + Nguồn tin quốc tế (NewsAPI): Bộ phận `NewsService` gửi các truy vấn HTTP GET tới API của dịch vụ NewsAPI để thu thập các tin tức công nghệ và khoa học mới nhất bằng tiếng Anh.
+
+- Bước 3: Lọc trùng lặp qua Cơ sở dữ liệu Supabase (Deduplication)
+  Đối với mỗi bài viết thu thập được, hệ thống tiến hành kiểm tra trùng lặp bằng cách thực hiện truy vấn trực tiếp vào bảng `articles` của cơ sở dữ liệu PostgreSQL đặt trên đám mây của Supabase. Nếu đường dẫn (URL) của bài báo đã tồn tại, hệ thống sẽ bỏ qua bài viết này nhằm tối ưu hóa chi phí gọi API của trí tuệ nhân tạo và tránh dư thừa dữ liệu.
+
+- Bước 4: Trích xuất nội dung chi tiết bài viết (Full-text Extraction)
+  + Với các tin tức RSS từ VnExpress (vốn chỉ có tiêu đề và mô tả rất ngắn), bộ phận `HtmlExtractor` sẽ thực hiện tải trang HTML chi tiết từ URL của bài báo.
+  + Sử dụng thư viện `@mozilla/readability` kết hợp với `jsdom` để giả lập cấu trúc tài liệu DOM, tiến hành lọc bỏ quảng cáo, scripts, css và các thẻ rác, từ đó trích xuất chính xác phần nội dung văn bản chi tiết (`fullText`), ảnh đại diện bài viết (`og:image`) và tác giả.
+  + Văn bản sau khi trích xuất được giới hạn độ dài dưới 8000 ký tự đầu tiên để tối ưu hóa chi phí token và tốc độ xử lý khi gửi cho mô hình AI.
+
+- Bước 5: Biên tập và dịch thuật tự động bằng Trí tuệ nhân tạo (AI Processing)
+  Tiêu đề gốc và nội dung chi tiết bài viết được đóng gói và chuyển sang `AIService`. Tại đây, hệ thống gửi yêu cầu xử lý đến Gemini API với mô hình `gemini-2.5-flash`. Nhằm đối phó với các lỗi mất kết nối mạng hoặc giới hạn băng thông (Rate Limit), hệ thống tích hợp sẵn cơ chế dự phòng (Fallback) tự động chuyển hướng cuộc gọi sang mô hình của Pollinations AI (OpenAI-compatible). Trợ lý ảo AI thực hiện biên tập lại tiêu đề, tóm tắt bài viết trong khoảng 50-70 từ, dịch toàn bộ nội dung sang tiếng Việt mượt mà và tự động phân loại chuyên mục.
+
+- Bước 6: Hậu xử lý và lưu trữ dữ liệu
+  Dữ liệu trả về từ AI dưới dạng chuỗi JSON được trích xuất bằng biểu thức chính quy (Regex) để loại bỏ phần văn bản dư thừa, chuẩn hóa các ký tự escape dấu nháy đơn tiếng Việt lỗi, tiến hành phân tích cú pháp (parse) thành đối tượng Javascript và thực hiện ghi trực tiếp vào bảng `articles` trên Supabase qua kết nối PostgreSQL.
+
+- Bước 7: Tương tác và hiển thị phía Client (Flutter App)
+  Ứng dụng di động Flutter sử dụng Supabase Client SDK để truy cập trực tiếp vào cơ sở dữ liệu Supabase mà không thông qua REST API trung gian của Backend Node.js. Ứng dụng tải về danh sách các bài báo đã được dịch thuật và phân loại theo thời gian xuất bản mới nhất để hiển thị lên màn hình chính. Người dùng có thể sử dụng chức năng đọc báo bằng giọng nói (TTS) qua Google TTS hoặc FPT TTS để nghe nội dung tóm tắt hoặc nội dung chi tiết. Khi người dùng đánh dấu Lưu trữ (Bookmark) hoặc Yêu thích (Like), ứng dụng Flutter gửi trực tiếp lệnh ghi/xóa bản ghi lên các bảng tương ứng trên Supabase.
+
+
+--------------------------------------------------------------------------------
+PHẦN 2: BỔ SUNG VÀO CHƯƠNG 3
+--------------------------------------------------------------------------------
+* Vị trí chèn tối ưu nhất:
+Để báo cáo mạch lạc và nêu bật được phần "Pipeline tự động hóa nội dung", cấu trúc tốt nhất cho Chương 3 (Cài đặt và triển khai) nên được tổ chức như sau:
+- 3.1. Cài đặt môi trường phát triển (Flutter, Node.js, PostgreSQL/Supabase)
+- 3.2. Cấu hình cơ sở dữ liệu và API Supabase
+- 3.3. Xây dựng Pipeline tự động hóa nội dung tại Backend Node.js
+  - 3.3.1. Thiết lập tiến trình cào dữ liệu tự động (Scraper & Scheduler)
+  - 3.3.2. Thiết kế Prompt Engineering và Tích hợp Trí tuệ nhân tạo (AI Service)  <-- CHÈN NỘI DUNG DƯỚI ĐÂY VÀO MỤC NÀY
+
+Dưới đây là nội dung chi tiết cho mục 3.3.2:
+
+3.3.2. Thiết kế Prompt Engineering và Tích hợp Trí tuệ nhân tạo (AI Service)
+
+Để tự động hóa việc dịch thuật, biên tập, tóm tắt và phân loại tin tức thô thu thập từ nhiều nguồn khác nhau, hệ thống tích hợp mô hình ngôn ngữ lớn (LLM) thông qua Gemini API của Google.
+
+3.3.2.1. Lựa chọn Mô hình ngôn ngữ lớn (Large Language Model)
+Đề tài lựa chọn mô hình "gemini-2.5-flash" để xử lý các tác vụ ngôn ngữ cốt lõi trong hệ thống. Mô hình này sở hữu các ưu điểm vượt trội phù hợp với bài toán của ứng dụng:
+- Thời gian phản hồi (Latency) cực ngắn, phù hợp với các pipeline xử lý dữ liệu lớn theo thời gian thực.
+- Khả năng am hiểu ngữ nghĩa và ngữ cảnh tiếng Việt tốt, giúp nội dung dịch mượt mà và tự nhiên theo văn phong báo chí Việt Nam.
+- Hỗ trợ tính năng xuất dữ liệu có cấu trúc (Structured JSON Output), giúp đảm bảo kết quả phản hồi từ mô hình luôn tuân thủ đúng định dạng JSON để lập trình viên dễ dàng phân tích cú pháp (parse).
+
+3.3.2.2. Thiết kế cấu trúc Prompt Engineering
+Nhằm đạt được chất lượng biên tập tốt nhất và tránh hiện tượng "ảo giác" (hallucination) của mô hình AI, cấu trúc Prompt được thiết kế kết hợp nhiều kỹ thuật Prompt Engineering như: Phân vai (Role-playing), thiết lập ràng buộc định lượng, giới hạn phân loại và định nghĩa định dạng đầu ra.
+
+Cấu trúc Prompt chi tiết được triển khai trong mã nguồn Backend như sau:
+
+```javascript
+const buildPrompt = (originalTitle, articleContent) => `
+Bạn là một Biên tập viên tin tức chuyên nghiệp. Hãy đọc tiêu đề và nội dung bài báo dưới đây, sau đó dịch thuật, biên tập lại và trả về cấu trúc JSON chứa các trường sau:
+
+1. "title_vi": Tiêu đề bài báo dịch sang tiếng Việt một cách tự nhiên, hấp dẫn.
+2. "summary_vi": Tóm tắt ngắn gọn nội dung bài báo bằng tiếng Việt trong khoảng 50-70 từ.
+3. "category": Phân loại chuyên mục phù hợp nhất (Chọn một trong các chuyên mục sau: Thời sự, Thế giới, Kinh doanh, Giải trí, Thể thao, Pháp luật, Giáo dục, Sức khỏe, Gia đình, Du lịch, Khoa học & Công nghệ, Đời sống, Tin xem nhiều, hoặc Khác).
+4. "full_content_vi": Viết lại hoặc dịch toàn bộ nội dung bài báo chi tiết bằng tiếng Việt một cách mượt mà, chuyên nghiệp theo phong cách báo chí. Hãy giữ lại toàn bộ số liệu, sự kiện chính và đảm bảo nội dung đầy đủ chi tiết nhất có thể.
+
+Tiêu đề gốc: ${originalTitle}
+Nội dung chi tiết gốc:
+${articleContent}
+
+LƯU Ý QUAN TRỌNG:
+- Định dạng kết quả trả về bắt buộc phải tuân thủ đúng cấu trúc JSON với các key: "title_vi", "summary_vi", "category", "full_content_vi".
+`;
+```
+
+Các kỹ thuật thiết kế Prompt được áp dụng cụ thể bao gồm:
+- Kỹ thuật Phân vai (Role-playing): Khai báo "Bạn là một Biên tập viên tin tức chuyên nghiệp" nhằm định hình phong cách viết của AI. AI sẽ sử dụng các thuật từ chuyên môn và cấu trúc câu mượt mà, thu hút người đọc thay vì dịch máy thô sơ.
+- Ràng buộc định lượng (Quantitative Constraint): Yêu cầu rõ ràng độ dài của bản tóm tắt phải nằm trong khoảng "50-70 từ". Điều này giúp kiểm soát kích thước giao diện hiển thị trên ứng dụng di động, tránh tràn chữ hoặc vỡ khung thiết kế.
+- Hạn chế phân loại (Classification Constraints): Liệt kê danh sách các chuyên mục cụ thể mà hệ thống hỗ trợ. Việc này buộc mô hình phải chọn một trong các giá trị định sẵn, tránh việc AI tự ý tạo ra các chuyên mục mới gây lỗi phân loại trên giao diện người dùng.
+- Bảo toàn thông tin (Information Fidelity): Ra lệnh cho AI "giữ lại toàn bộ số liệu, sự kiện chính" nhằm đảm bảo tính chính xác khoa học của bản tin sau khi biên tập.
+
+3.3.2.3. Thiết lập định dạng đầu ra có cấu trúc (Structured Output Configuration)
+Để ngăn ngừa tình trạng mô hình AI trả về các đoạn text mô tả tự do xung quanh khối JSON, hệ thống thiết lập cấu hình SDK Gemini bắt buộc trả về kiểu MIME JSON bằng cách cấu hình thuộc tính `generationConfig`:
+
+```javascript
+const model = genAI.getGenerativeModel({ 
+  model: 'gemini-2.5-flash',
+  generationConfig: {
+    responseMimeType: 'application/json'
+  }
+});
+```
+
+Cấu hình này ép buộc mô hình sinh chữ (Text Generator) tự động áp dụng bộ lọc tokens để đầu ra luôn là một chuỗi JSON hợp lệ.
+
+3.3.2.4. Xử lý hậu kỳ dữ liệu và Cơ chế dự phòng (Post-processing & Fallback)
+Trong quá trình vận hành, hệ thống áp dụng các giải pháp xử lý lỗi và dự phòng nhằm đảm bảo tính ổn định:
+- Tiền xử lý chuỗi JSON: Hệ thống sử dụng biểu thức chính quy (Regex) `/\{[\s\S]*\}/` để trích xuất khối JSON từ vị trí dấu ngoặc nhọn `{` đầu tiên đến dấu `}` cuối cùng, giúp loại bỏ các văn bản thừa (nếu có). Đồng thời, sửa lỗi AI tự động escape nháy đơn không hợp lệ trong JSON chuẩn bằng lệnh `replace(/\\'/g, "'")`.
+- Cơ chế dự phòng (Fallback Mechanism): Khi Gemini API xảy ra lỗi quá tải hoặc hết hạn mức (quota), hệ thống bắt lỗi (catch error) và chuyển tiếp yêu cầu sang Pollinations AI. Phương pháp này đảm bảo pipeline tự động hóa tin tức luôn hoạt động liên tục 24/7 mà không bị ngắt quãng.

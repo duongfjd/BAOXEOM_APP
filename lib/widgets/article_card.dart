@@ -17,49 +17,44 @@ class ArticleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withOpacity(0.05), width: 0.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          )
-        ],
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(vertical: 16),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Article Image
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                   child: Hero(
                     tag: 'article_image_${article.id}',
                     child: CachedNetworkImage(
                       imageUrl: article.urlToImage ?? '',
-                      width: 90,
-                      height: 90,
+                      width: 130,
+                      height: 85,
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Image.asset(
                         AppConstants.newsPlaceholder,
-                        width: 90,
-                        height: 90,
+                        width: 130,
+                        height: 85,
                         fit: BoxFit.cover,
                       ),
                       errorWidget: (context, url, error) => Image.asset(
                         AppConstants.newsPlaceholder,
-                        width: 90,
-                        height: 90,
+                        width: 130,
+                        height: 85,
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -72,34 +67,43 @@ class ArticleCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        article.category.toUpperCase(),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.secondary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
                         article.titleVi,
-                        maxLines: 2,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: Theme.of(context).textTheme.titleLarge?.fontFamily,
+                          fontWeight: FontWeight.w600,
                           height: 1.3,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        '${article.sourceName}  •  ${DateFormat('dd/MM/yyyy').format(article.publishedAt)}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.4),
-                          fontSize: 12,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              article.sourceName,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            DateFormat('dd/MM/yyyy').format(article.publishedAt),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

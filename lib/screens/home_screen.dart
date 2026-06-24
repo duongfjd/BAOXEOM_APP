@@ -8,9 +8,11 @@ import '../widgets/hot_news_carousel.dart';
 import '../widgets/recommended_article_card.dart';
 import '../widgets/shimmer_loading.dart';
 import 'article_detail_screen.dart';
+import 'all_news_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? onNavigateToAllNews;
+  const HomeScreen({super.key, this.onNavigateToAllNews});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -93,7 +95,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Báo Xe Ôm',
+                                    'News Enjoy',
                                     style: Theme.of(context).textTheme.displayLarge?.copyWith(
                                           fontSize: 28,
                                           fontWeight: FontWeight.bold,
@@ -235,7 +237,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       TextButton(
-                        onPressed: () {},
+                        onPressed: widget.onNavigateToAllNews ?? () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AllNewsScreen(),
+                            ),
+                          );
+                        },
                         child: const Text('Xem tất cả'),
                       ),
                     ],

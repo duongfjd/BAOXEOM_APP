@@ -1,0 +1,316 @@
+================================================================================
+TÀI LIỆU CHI TIẾT BIỂU ĐỒ LỚP (CLASS DIAGRAM) - BACKEND NEWS ENJOY
+================================================================================
+
+Tài liệu này mô tả chi tiết kiến trúc lớp (Class Diagram) của hệ thống Backend ứng dụng
+News Enjoy. Hệ thống được phát triển bằng Node.js (Express), sử dụng cơ sở dữ liệu PostgreSQL,
+tích hợp các nguồn tin tức (VnExpress RSS & NewsAPI) và xử lý dịch thuật, tóm tắt,
+phân loại tự động thông qua trí tuệ nhân tạo (Gemini AI & Pollinations Fallback API).
+
+Biểu đồ lớp được chia làm 2 phần chính:
+1. DATABASE ENTITIES (CÁC LỚP THỰC THỂ DB): Đại diện cho cấu trúc bảng và các mối quan hệ.
+2. SERVICE & CONTROLLER CLASSES (CÁC LỚP XỬ LÝ NGHIỆP VỤ): Đại diện cho các module xử lý logic.
+
+--------------------------------------------------------------------------------
+MỤC LỤC
+--------------------------------------------------------------------------------
+1. MÃ NGUỒN MERMAID CLASS DIAGRAM
+2. PHẦN 1: DATABASE ENTITIES (CÁC LỚP THỰC THỂ DB)
+3. PHẦN 2: SERVICE & CONTROLLER CLASSES (CÁC LỚP XỬ LÝ NGHIỆP VỤ)
+4. SỰ TƯƠNG TÁC VÀ LUỒNG HOẠT ĐỘNG CHÍNH CỦA HỆ THỐNG
+5. THÔNG TIN CẤU HÌNH VÀ THƯ VIỆN SỬ DỤNG
+
+================================================================================
+1. MÃ NGUỒN MERMAID CLASS DIAGRAM
+================================================================================
+Dưới đây là mã nguồn Mermaid hoàn chỉnh để hiển thị trực quan biểu đồ lớp này. Bạn có
+thể sao chép mã này vào các công cụ hỗ trợ Mermaid (như GitHub, Notion, Mermaid Live Editor)
+để xem hình ảnh trực quan:
+
+```mermaid
+classDiagram
+    %% --- CÁC THỰC THỂ CƠ SỞ DỮ LIỆU (DATABASE ENTITIES) ---
+    class User {
+        +uuid id
+        +string email
+        +string name
+        +string avatar_url
+        +timestamp created_at
+    }
+
+    class Article {
+        +integer id
+        +string url
+        +string original_title
+        +string title_vi
+        +string summary_vi
+        +string category
+        +timestamp published_at
+        +timestamp created_at
+        +string source_name
+        +string author
+        +string url_to_image
+        +string full_content_vi
+    }
+
+    class Bookmark {
+        +integer id
+        +uuid user_id
+        +integer article_id
+        +timestamp created_at
+    }
+
+    class Like {
+        +integer id
+        +uuid user_id
+        +integer article_id
+        +timestamp created_at
+    }
+
+    class Notification {
+        +integer id
+        +uuid user_id
+        +string title
+        +string body
+        +boolean is_read
+        +timestamp created_at
+    }
+
+    %% Quan hệ giữa các bảng cơ sở dữ liệu (Relationships)
+    User "1" --> "0..*" Bookmark : has
+    Article "1" --> "0..*" Bookmark : referenced_by
+    User "1" --> "0..*" Like : performs
+    Article "1" --> "0..*" Like : liked_by
+    User "1" --> "0..*" Notification : receives
+
+    %% --- CÁC THÀNH PHẦN XỬ LÝ NGHIỆP VỤ (BACKEND SERVICES) ---
+    class DbConnection {
+        +Pool pool
+        +initDB() void
+    }
+
+    class ExpressServer {
+        +app Express
+        +PORT integer
+        +startSystem() void
+        +processNews() void
+    }
+
+    class NewsService {
+        +fetchNews() Array~NewsApiArticle~
+    }
+
+    class AIService {
+        +GoogleGenerativeAI genAI
+        +buildPrompt(string originalTitle, string articleContent) string
+        +parseJsonFromModel(string rawText) object
+        +summarizeWithGemini(string prompt) object
+        +summarizeWithFallback(string prompt) object
+        +summarizeArticle(string title, string content) object
+    }
+
+    class ScraperScheduler {
+        +integer MAX_ARTICLES_PER_BATCH
+        +runScraperPipeline() void
+        +checkArticleExists(string url) boolean
+        +saveArticleToDB(object articleData, object aiResult) void
+    }
+
+    class RssParser {
+        +Array RSS_FEEDS
+        +fetchFeed(object feed) Array~RssArticle~
+        +fetchAllRssArticles() Array~RssArticle~
+    }
+
+    class HtmlExtractor {
+        +Array USER_AGENTS
+        +getRandomUserAgent() string
+        +sleepRandom(int min, int max) Promise
+        +extractArticleDetail(string url) object
+    }
+
+    %% Quan hệ phụ thuộc/sử dụng giữa các Services (Dependencies)
+    ExpressServer ..> DbConnection : Khởi tạo & truy xuất database
+    ExpressServer ..> NewsService : Gọi fetchNews lấy tin từ NewsAPI
+    ExpressServer ..> AIService : Gọi summarizeArticle dịch và tóm tắt bài viết
+    ExpressServer ..> ScraperScheduler : Kích hoạt & lên lịch cron chạy scraper định kỳ
+    
+    ScraperScheduler ..> DbConnection : Kết nối để lưu & kiểm tra trùng lặp
+    ScraperScheduler ..> RssParser : Gọi fetchAllRssArticles để thu thập tin RSS
+    ScraperScheduler ..> HtmlExtractor : Gọi extractArticleDetail để cào chi tiết bài viết
+    ScraperScheduler ..> AIService : Gọi summarizeArticle để dịch/tóm tắt nội dung cào được
+```
+
+================================================================================
+2. PHẦN 1: DATABASE ENTITIES (CÁC LỚP THỰC THỂ DB)
+================================================================================
+Phần này mô tả cấu trúc các thực thể dữ liệu được lưu trữ trong cơ sở dữ liệu
+PostgreSQL (tham chiếu từ file ex-database.txt).
+
+2.1 Lớp Thực thể: User (Người dùng)
+- Mô tả: Đại diện cho thông tin tài khoản của người dùng sử dụng ứng dụng.
+- Các trường thuộc tính:
+  * id (uuid - PRIMARY KEY): Định danh duy nhất toàn cầu cho người dùng (Thường được liên kết với hệ thống Supabase Auth).
+  * email (text): Địa chỉ thư điện tử của người dùng.
+  * name (text): Tên hiển thị của người dùng.
+  * avatar_url (text): Đường dẫn hình ảnh đại diện của người dùng.
+  * created_at (timestamp): Thời gian tài khoản được tạo (mặc định là thời gian hiện tại).
+
+2.2 Lớp Thực thể: Article (Bài viết/Tin tức)
+- Mô tả: Lưu trữ toàn bộ dữ liệu tin tức đã qua xử lý bởi hệ thống và AI.
+- Các trường thuộc tính:
+  * id (integer - PRIMARY KEY): Định danh tự tăng cho bài viết.
+  * url (text - UNIQUE): Đường dẫn gốc của bài báo (Được dùng làm tiêu chí lọc trùng lặp).
+  * original_title (text): Tiêu đề gốc tiếng Anh hoặc tiếng Việt của nguồn gốc.
+  * title_vi (text): Tiêu đề bài viết sau khi được dịch và biên tập sang tiếng Việt.
+  * summary_vi (text): Nội dung tóm tắt ngắn gọn của bài báo bằng tiếng Việt (khoảng 50-70 từ).
+  * category (text): Chuyên mục phân loại của bài viết (ví dụ: Thời sự, Thế giới, Thể thao...).
+  * published_at (timestamp): Thời điểm xuất bản gốc của bài viết.
+  * created_at (timestamp): Thời điểm bài viết được cào và lưu vào database của hệ thống.
+  * source_name (text): Tên nguồn tin tức (ví dụ: VnExpress, NewsAPI...).
+  * author (text): Tác giả bài viết.
+  * url_to_image (text): Đường dẫn ảnh đại diện/ảnh bìa của bài báo.
+  * full_content_vi (text): Nội dung chi tiết toàn bài đã được dịch hoặc viết lại bằng tiếng Việt mượt mà.
+
+2.3 Lớp Thực thể: Bookmark (Lưu trữ bài viết)
+- Mô tả: Bảng trung gian thể hiện mối quan hệ Nhiều-Nhiều (N-N) giữa User và Article. Cho biết người dùng đã lưu những bài viết nào.
+- Các trường thuộc tính:
+  * id (integer - PRIMARY KEY): Định danh tự tăng.
+  * user_id (uuid - FOREIGN KEY): Liên kết tới User.id.
+  * article_id (integer - FOREIGN KEY): Liên kết tới Article.id.
+  * created_at (timestamp): Thời gian người dùng thực hiện đánh dấu lưu trữ bài viết.
+
+2.4 Lớp Thực thể: Like (Yêu thích bài viết)
+- Mô tả: Bảng trung gian thể hiện mối quan hệ Nhiều-Nhiều (N-N) giữa User và Article. Ghi nhận lượt thích của người dùng đối với các bài báo.
+- Các trường thuộc tính:
+  * id (integer - PRIMARY KEY): Định danh tự tăng.
+  * user_id (uuid - FOREIGN KEY): Liên kết tới User.id.
+  * article_id (integer - FOREIGN KEY): Liên kết tới Article.id.
+  * created_at (timestamp): Thời gian người dùng nhấn thích bài viết.
+
+2.5 Lớp Thực thể: Notification (Thông báo)
+- Mô tả: Gửi các thông báo cá nhân hóa tới người dùng.
+- Các trường thuộc tính:
+  * id (integer - PRIMARY KEY): Định danh tự tăng.
+  * user_id (uuid - FOREIGN KEY): Liên kết tới User.id. Cho biết thông báo này thuộc về ai.
+  * title (text): Tiêu đề thông báo.
+  * body (text): Nội dung chi tiết của thông báo.
+  * is_read (boolean): Trạng thái đã đọc hay chưa (mặc định là false).
+  * created_at (timestamp): Thời điểm tạo thông báo.
+
+MỐI QUAN HỆ CHÍNH:
+- Một User có thể tạo ra nhiều dòng Bookmark và Like (Quan hệ 1 - Nhiều).
+- Một Article có thể xuất hiện trong nhiều Bookmark và Like của các người dùng khác nhau (Quan hệ 1 - Nhiều).
+- Một User có thể nhận được nhiều Notification (Quan hệ 1 - Nhiều).
+
+================================================================================
+3. PHẦN 2: SERVICE & CONTROLLER CLASSES (CÁC LỚP XỬ LÝ NGHIỆP VỤ)
+================================================================================
+Phần này mô tả cấu trúc thiết kế logic nghiệp vụ phần mềm Node.js ở backend.
+
+3.1 Lớp: DbConnection (db.js)
+- Vai trò: Quản lý kết nối cơ sở dữ liệu PostgreSQL và khởi tạo cấu trúc bảng.
+- Thuộc tính:
+  * pool: Đối tượng kết nối của thư viện 'pg' (Pool).
+- Phương thức:
+  * initDB() [Async]: Tạo bảng `articles` và các cột bổ sung nếu chưa tồn tại.
+
+3.2 Lớp: ExpressServer (index.js)
+- Vai trò: Khởi động máy chủ web Express, cấu hình định tuyến API, thiết lập lịch trình quét định kỳ.
+- Thuộc tính:
+  * app: Đối tượng ứng dụng Express.
+  * PORT: Cổng chạy server (đọc từ môi trường, mặc định 3000).
+- Phương thức:
+  * startSystem() [Async]: Khởi động hệ thống: gọi khởi tạo DB, mở cổng lắng nghe HTTP, chạy thử nghiệm quét tin và cấu hình cron job.
+  * processNews() [Async]: Luồng xử lý định kỳ dành riêng cho NewsAPI (Lấy tin thô -> Gửi AI -> Lưu DB).
+
+3.3 Lớp: NewsService (newsService.js)
+- Vai trò: Tương tác với NewsAPI bên ngoài để lấy các bài báo nước ngoài mới nhất.
+- Phương thức:
+  * fetchNews() [Async]: Gửi yêu cầu HTTP GET tới NewsAPI với các từ khóa công nghệ, pháp luật, thể thao... và trả về mảng bài viết thô (Array~NewsApiArticle~).
+
+3.4 Lớp: AIService (aiService.js)
+- Vai trò: Giao tiếp với các mô hình trí tuệ nhân tạo để biên tập, dịch thuật, tóm tắt và phân loại bài viết.
+- Thuộc tính:
+  * genAI: Thực thể kết nối GoogleGenerativeAI sử dụng API Key.
+- Phương thức:
+  * buildPrompt(originalTitle, articleContent) [String]: Tạo prompt chuẩn hóa, ép cấu trúc JSON phản hồi cho AI.
+  * parseJsonFromModel(rawText) [Object]: Trích xuất phần text dạng JSON từ AI một cách an toàn và parse thành Object.
+  * summarizeWithGemini(prompt) [Async - Object]: Sử dụng model `gemini-2.5-flash` của Google để xử lý prompt với thiết lập `responseMimeType: 'application/json'`.
+  * summarizeWithFallback(prompt) [Async - Object]: Phương án dự phòng. Gọi API Pollinations (tương thích OpenAI) khi Gemini bị quá tải hoặc lỗi.
+  * summarizeArticle(title/content, content) [Async - Object]: Hàm điều phối chính. Hỗ trợ chữ ký 1 tham số (ghép nội dung thô cho NewsAPI) và 2 tham số (RSS Scraper). Thực hiện gọi Gemini trước, nếu lỗi tự động fallback sang Pollinations.
+
+3.5 Lớp: ScraperScheduler (scraper/scheduler.js)
+- Vai trò: Bộ điều hợp trung tâm cho luồng cào dữ liệu RSS mới của VnExpress.
+- Thuộc tính:
+  * MAX_ARTICLES_PER_BATCH [Tĩnh - integer]: Giới hạn bài viết mới xử lý trong một mẻ (mặc định 15) để kiểm soát tài nguyên và chi phí AI.
+- Phương thức:
+  * checkArticleExists(url) [Async - Boolean]: Kiểm tra nhanh trong DB xem URL bài báo đã tồn tại chưa để tránh xử lý trùng lặp.
+  * saveArticleToDB(articleData, aiResult) [Async]: Lưu trữ bài viết đã dịch thuật/tóm tắt hoàn chỉnh vào bảng `articles` dùng mệnh đề `ON CONFLICT (url) DO NOTHING`.
+  * runScraperPipeline() [Async]: Chạy toàn bộ pipeline: Thu thập RSS -> Kiểm tra tồn tại -> Cào chi tiết -> Gọi AI dịch & phân loại -> Lưu DB.
+
+3.6 Lớp: RssParser (scraper/rssParser.js)
+- Vai trò: Quét và tiền xử lý các kênh RSS của VnExpress.
+- Thuộc tính:
+  * RSS_FEEDS [Tĩnh - Array]: Danh sách các chuyên mục và URL RSS tương ứng của VnExpress.
+- Phương thức:
+  * fetchFeed(feed) [Async - Array]: Đọc nội dung RSS của một chuyên mục cụ thể, làm sạch URL (loại bỏ query params/hash).
+  * fetchAllRssArticles() [Async - Array]: Duyệt qua tất cả RSS_FEEDS để lấy danh sách bài viết và loại bỏ trùng lặp URL ngay tại bộ nhớ tạm.
+
+3.7 Lớp: HtmlExtractor (scraper/htmlExtractor.js)
+- Vai trò: Tải trang HTML chi tiết và trích xuất nội dung bài viết gốc, tránh việc bị block IP.
+- Thuộc tính:
+  * USER_AGENTS [Tĩnh - Array]: Danh sách các chuỗi định danh trình duyệt phổ biến để giả lập Client thật.
+- Phương thức:
+  * getRandomUserAgent() [String]: Lấy ngẫu nhiên một User-Agent từ danh sách cấu hình.
+  * sleepRandom(min, max) [Promise]: Hàm ngưng nghỉ ngẫu nhiên từ 1 đến 3 giây để giãn cách các request cào tin.
+  * extractArticleDetail(url) [Async - Object]: Gửi request tải HTML thô, lược bỏ các thẻ `<script>` và `<style>` để tối ưu bộ nhớ, sau đó sử dụng thư viện `@mozilla/readability` để bóc tách chính xác phần bài viết gốc, ảnh đại diện (`og:image`), và tên tác giả.
+
+================================================================================
+4. SỰ TƯƠNG TÁC VÀ LUỒNG HOẠT ĐỘNG CHÍNH CỦA HỆ THỐNG
+================================================================================
+Hệ thống vận hành song song 2 luồng công việc chính được kích hoạt mỗi giờ một lần
+thông qua Cron Job:
+
+4.1 Luồng 1: VnExpress RSS Scraper Pipeline
+[RssParser] tải danh sách bài viết từ các đầu mục RSS của VnExpress.
+      |
+      v
+[ScraperScheduler] nhận danh sách, duyệt qua từng bài viết và dùng
+`checkArticleExists` kiểm tra trùng lặp trong DB qua trường URL.
+      |
+      v (Nếu chưa tồn tại)
+[HtmlExtractor] tải trang chi tiết, trích xuất văn bản thô (Full-text) và ảnh đại diện.
+      |
+      v
+[AIService] gửi tiêu đề và nội dung thô lên Gemini AI (hoặc Pollinations API) để
+nhận về JSON chứa tiêu đề tiếng Việt, tóm tắt, chuyên mục và nội dung dịch chi tiết.
+      |
+      v
+[ScraperScheduler] gọi `saveArticleToDB` ghi nhận bài viết hoàn chỉnh vào CSDL.
+
+4.2 Luồng 2: NewsAPI Client Pipeline
+[NewsService] gửi yêu cầu lấy 20 bài báo công nghệ/thể thao nước ngoài mới nhất.
+      |
+      v
+[ExpressServer] duyệt qua từng bài báo, kiểm tra xem đã được xử lý chưa.
+      |
+      v (Nếu chưa tồn tại)
+[AIService] nhận nội dung tiếng Anh thô để dịch thuật, tóm tắt và phân loại thành tiếng Việt.
+      |
+      v
+[ExpressServer] chèn bài báo dịch hoàn chỉnh vào cơ sở dữ liệu PostgreSQL.
+
+================================================================================
+5. THÔNG TIN CẤU HÌNH VÀ THƯ VIỆN SỬ DỤNG
+================================================================================
+Để vận hành trơn tru cấu trúc lớp trên, backend sử dụng các package chính sau:
+- express & cors: Xây dựng REST API phục vụ Client.
+- pg (node-postgres): Kết nối pool chất lượng cao với PostgreSQL.
+- @google/generative-ai: Gọi mô hình `gemini-2.5-flash` để xử lý ngôn ngữ tự nhiên.
+- rss-parser: Đọc và parse dữ liệu XML từ các kênh RSS.
+- axios: Thực hiện các truy vấn HTTP tải trang hoặc gọi API dự phòng.
+- jsdom & @mozilla/readability: Giả lập DOM trình duyệt để bóc tách nội dung bài viết
+  một cách thông minh, loại bỏ quảng cáo/thanh điều hướng.
+- node-cron: Lên lịch trình quét tin tức tự động.
+================================================================================

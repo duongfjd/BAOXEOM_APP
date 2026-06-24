@@ -15,8 +15,12 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
-    const HomeScreen(),
+  late final List<Widget> _screens = [
+    HomeScreen(onNavigateToAllNews: () {
+      setState(() {
+        _currentIndex = 1;
+      });
+    }),
     const AllNewsScreen(),
     const BookmarksScreen(),
     const ProfileScreen(),
