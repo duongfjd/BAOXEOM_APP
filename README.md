@@ -1,4 +1,4 @@
-# 🎙️ Báo Xe Ôm (News Enjoy) - Nền Tảng Đọc Báo Âm Thanh Thông Minh Tích Hợp AI
+# News Enjoy - Nền Tảng Đọc Báo Âm Thanh Thông Minh Tích Hợp AI
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.10.7-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Node.js](https://img.shields.io/badge/Node.js-v18+-339933?logo=node.js&logoColor=white)](https://nodejs.org)
