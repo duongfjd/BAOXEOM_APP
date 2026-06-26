@@ -7,7 +7,7 @@
 [![Express](https://img.shields.io/badge/Express-Backend%20API-000000?logo=express&logoColor=white)](https://expressjs.com)
 [![Riverpod](https://img.shields.io/badge/Riverpod-State%20Management-7D57C2)](https://riverpod.dev)
 
-**Báo Xe Ôm (News Enjoy)** là một hệ sinh thái tin tức thông minh toàn diện, kết hợp giữa ứng dụng di động (Flutter) và hệ thống máy chủ tự động hóa (Node.js). Dự án được thiết kế để giải quyết nhu cầu cập nhật tin tức rảnh tay bằng cách tự động thu thập tin tức từ các nguồn RSS uy tín, sử dụng trí tuệ nhân tạo **Google Gemini AI** để dịch thuật, tóm tắt và phân loại, sau đó chuyển đổi thành âm thanh chất lượng cao thông qua các dịch vụ **Text-to-Speech (TTS)** chuyên nghiệp (FPT AI và Google TTS).
+** News Enjoy** là một hệ sinh thái tin tức thông minh toàn diện, kết hợp giữa ứng dụng di động (Flutter) và hệ thống máy chủ tự động hóa (Node.js). Dự án được thiết kế để giải quyết nhu cầu cập nhật tin tức rảnh tay bằng cách tự động thu thập tin tức từ các nguồn RSS uy tín, sử dụng trí tuệ nhân tạo **Google Gemini AI** để dịch thuật, tóm tắt và phân loại, sau đó chuyển đổi thành âm thanh chất lượng cao thông qua các dịch vụ **Text-to-Speech (TTS)** chuyên nghiệp (FPT AI và Google TTS).
 
 ---
 
@@ -147,7 +147,7 @@ newxeom/
 ├── ios/                       # Cấu hình dự án iOS
 ├── assets/                    # Hình ảnh, logo của ứng dụng
 │   ├── NEWS.jpg
-│   └── XEOMLOGO.jpg           # Logo Báo Xe Ôm
+│   └── XEOMLOGO.jpg           # Logo 
 ├── backend/                   # Mã nguồn Node.js Backend
 │   └── backend/
 │       ├── public/            # Giao diện web tĩnh của Backend
